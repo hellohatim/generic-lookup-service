@@ -1,0 +1,15 @@
+{
+  "name": "lookup-service-docs-verify",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^11.0.0",
+    "js-yaml": "^4.1.0"
+  }
+}

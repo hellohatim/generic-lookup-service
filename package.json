@@ -1,0 +1,14 @@
+{
+  "name": "generic-lookup-service",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "npm run dev -w @lookup/api",
+    "build": "npm run build -w @lookup/api",
+    "test": "npm run test -w @lookup/api",
+    "test:functional": "npm run test:functional -w @lookup/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

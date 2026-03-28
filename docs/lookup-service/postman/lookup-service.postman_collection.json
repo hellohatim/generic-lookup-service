@@ -1,0 +1,341 @@
+{
+  "info": {
+    "_postman_id": "e4f2b8c0-9c01-41a9-b0c0-lookup-service-sample",
+    "name": "Lookup service (design sample)",
+    "description": "Sample requests aligned with docs/lookup-service/openapi.yaml. Import the matching environment JSON and set accessToken (Bearer). IDs default to mongosh seed script.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/lookup/v1"
+    },
+    {
+      "key": "tenantId",
+      "value": "a1b2c3d4e5f60718293a4b5c"
+    },
+    {
+      "key": "namespaceId",
+      "value": "a1b2c3d4e5f60718293a4b5d"
+    },
+    {
+      "key": "tableId",
+      "value": "a1b2c3d4e5f60718293a4b5e"
+    }
+  ],
+  "item": [
+    {
+      "name": "Namespaces",
+      "item": [
+        {
+          "name": "List namespaces",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "description": "Optional correlation — see observability.md"
+              }
+            ],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Create namespace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.environment.set('namespaceId', j.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"From Postman\",\n  \"slug\": \"from-postman\",\n  \"description\": \"Created via collection\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces"
+          }
+        },
+        {
+          "name": "Get namespace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}?includeDeleted=false"
+          }
+        },
+        {
+          "name": "Restore namespace",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/restore"
+          }
+        },
+        {
+          "name": "Delete namespace (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}?permanent=false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LookupTables",
+      "item": [
+        {
+          "name": "List tables",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables?includeDeprecated=true&hideExpired=false&includeDeleted=false&page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Create table",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.environment.set('tableId', j.id);",
+                  "  if (j.currentVersionId) pm.environment.set('versionId', j.currentVersionId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Seeded table clone\",\n  \"slug\": \"postman-table\",\n  \"description\": \"Optional; slug must be unique per namespace\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables"
+          }
+        },
+        {
+          "name": "Get table",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}?includeDeleted=false"
+          }
+        },
+        {
+          "name": "Patch table (deprecation optional)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated via Postman\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}"
+          }
+        },
+        {
+          "name": "Restore table",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/restore"
+          }
+        },
+        {
+          "name": "Delete table (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}?permanent=false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TableVersions",
+      "item": [
+        {
+          "name": "List versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/versions?page=1&pageSize=20"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Entries",
+      "item": [
+        {
+          "name": "List entries (offset)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.meta && j.meta.nextCursor) {",
+                  "    pm.environment.set('entryCursor', j.meta.nextCursor);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "List entries (cursor)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?cursor={{entryCursor}}&limit=20"
+          }
+        },
+        {
+          "name": "Create entry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"from-postman\",\n  \"value\": \"hello\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries"
+          }
+        },
+        {
+          "name": "Bulk upsert JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.auditId) pm.environment.set('importAuditId', j.auditId);",
+                  "  if (j.targetVersionId) pm.environment.set('versionId', j.targetVersionId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"overwrite_current\",\n  \"items\": [\n    { \"key\": \"bulk-a\", \"value\": 1 },\n    { \"key\": \"bulk-b\", \"value\": \"two\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/bulk"
+          }
+        },
+        {
+          "name": "Get entry by key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/by-key/greeting"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Imports",
+      "item": [
+        {
+          "name": "Bulk import Excel (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Select a .xlsx locally — wide or kv per format"
+                },
+                { "key": "mode", "value": "overwrite_current", "type": "text" },
+                { "key": "format", "value": "kv", "type": "text" },
+                {
+                  "key": "sheetName",
+                  "value": "",
+                  "type": "text",
+                  "description": "Optional; leave empty for first sheet"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports"
+          }
+        },
+        {
+          "name": "List import audits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get import audit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports/{{importAuditId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Exports",
+      "item": [
+        {
+          "name": "Export table (xlsx)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/exports?format=wide&filename=demo-export"
+          }
+        }
+      ]
+    }
+  ]
+}

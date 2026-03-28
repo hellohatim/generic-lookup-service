@@ -1,0 +1,6 @@
+{
+  "name": "@lookup/web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Angular UI placeholder — implement per docs/lookup-service/ui-design.md after API is stable."
+}

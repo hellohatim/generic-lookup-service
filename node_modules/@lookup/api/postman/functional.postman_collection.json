@@ -1,0 +1,265 @@
+{
+  "info": {
+    "name": "Lookup API functional",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": { "type": "noauth" },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('tenantSlug')) {",
+          "  pm.collectionVariables.set('tenantSlug', 'fn-' + Date.now());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Create tenant",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('tenantId', j.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Functional\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+        },
+        "url": "{{baseUrl}}/tenants"
+      }
+    },
+    {
+      "name": "Create namespace",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('namespaceId', j.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"NS\",\n  \"slug\": \"ns-func\"\n}"
+        },
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces"
+      }
+    },
+    {
+      "name": "Create table",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('tableId', j.id);",
+              "pm.collectionVariables.set('versionId', j.currentVersionId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"T\",\n  \"slug\": \"tbl-func\"\n}"
+        },
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables"
+      }
+    },
+    {
+      "name": "Create entry",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"key\": \"from-postman\",\n  \"value\": \"hello\"\n}"
+        },
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries"
+      }
+    },
+    {
+      "name": "Get entry by key",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('key matches', () => pm.response.json().key === 'from-postman');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/by-key/from-postman"
+      }
+    },
+    {
+      "name": "Bulk JSON upsert",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('auditId', () => j.auditId);",
+              "if (j.auditId) pm.collectionVariables.set('importAuditId', j.auditId);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mode\": \"overwrite_current\",\n  \"items\": [\n    { \"key\": \"bulk-a\", \"value\": 1 },\n    { \"key\": \"bulk-b\", \"value\": \"two\" }\n  ]\n}"
+        },
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/bulk"
+      }
+    },
+    {
+      "name": "List entries offset",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('items array', () => Array.isArray(j.items));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?page=1&pageSize=20"
+      }
+    },
+    {
+      "name": "Excel import",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const j = pm.response.json();",
+              "pm.test('audit', () => j.auditId && j.entriesWritten >= 1);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": "{{xlsxPath}}"
+            },
+            { "key": "mode", "value": "overwrite_current", "type": "text" },
+            { "key": "format", "value": "kv", "type": "text" }
+          ]
+        },
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports"
+      }
+    },
+    {
+      "name": "Get import audit",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports/{{importAuditId}}"
+      }
+    },
+    {
+      "name": "Export xlsx",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('content type', () => pm.response.headers.get('Content-Type').includes('spreadsheet'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/exports?format=wide&filename=fn"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:3000/lookup/v1" },
+    { "key": "tenantSlug", "value": "" },
+    { "key": "tenantId", "value": "" },
+    { "key": "namespaceId", "value": "" },
+    { "key": "tableId", "value": "" },
+    { "key": "versionId", "value": "" },
+    { "key": "importAuditId", "value": "" },
+    { "key": "xlsxPath", "value": "" }
+  ]
+}

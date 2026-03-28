@@ -1,0 +1,1751 @@
+openapi: 3.0.3
+info:
+  title: Generic Multi-Tenant Lookup Service API
+  version: 1.0.0
+  description: |
+    REST API for managing tenants, namespaces, lookup tables, and key-value entries.
+
+    **Hierarchy:** Tenant → Namespace → LookupTable → **TableVersion** → Entry.
+
+    **Table versions** are immutable snapshots; entries belong to one version. The table points to **currentVersionId**. See `docs/lookup-service/mongodb-data-model.md`.
+
+    **Bulk import:** `POST .../imports` accepts `.xlsx` (multipart). Modes: `new_version` | `overwrite_current`. Every import writes an **import audit** record.
+
+    **Bulk JSON:** `POST .../entries/bulk` upserts many key-value pairs with the same version modes; audit row uses `format: json`.
+
+    **Export:** `GET .../exports` downloads **`.xlsx`** for a table version (`wide` or `kv`). Exports remain **allowed** when the table is expired (read-only DR/migration) unless you override in implementation.
+
+    **Authentication:** Bearer JWT. See `docs/lookup-service/auth-tenant.md` for claims and tenant resolution.
+
+    **Observability:** Optional request headers and logging conventions — see `docs/lookup-service/observability.md`.
+
+    **Search semantics:** See `docs/lookup-service/mongodb-data-model.md` and the `GET .../entries` operation for
+    `valueMatch` (`exact` | `partial`), `caseSensitive`, optional `versionId` (historical reads), and **cursor** pagination.
+
+    **Deprecation vs expiry (default product rule):**
+    - **`isDeprecated` alone** does **not** block writes (warning-only; optional `Deprecation` header on GET table).
+    - **Expired:** `expiresAt != null` and **now** (UTC) **`>= expiresAt`** blocks **mutations** with **`TABLE_EXPIRED`** via **403** or **410** (pick **one** per deployment—see `Gone` response). Mutations include entries, imports, new versions, and JSON bulk.
+    - **`TABLE_DEPRECATED`** is **reserved** for a future strict mode; default API text does **not** use it for write denial.
+
+servers:
+  - url: https://api.example.com/lookup/v1
+    description: Production
+  - url: http://localhost:3000/lookup/v1
+    description: Local development
+
+tags:
+  - name: PlatformAdmin
+    description: Tenant lifecycle (requires platform_admin role)
+  - name: Namespaces
+    description: Namespaces within a tenant
+  - name: LookupTables
+    description: Lookup table metadata within a namespace
+  - name: Entries
+    description: Key-value rows within a lookup table version
+  - name: TableVersions
+    description: Immutable version history for a lookup table
+  - name: Imports
+    description: Excel bulk import, JSON bulk upsert audit, and import audit records
+  - name: Exports
+    description: Excel export for a table version
+
+security:
+  - bearerAuth: []
+
+paths:
+  /tenants:
+    post:
+      tags: [PlatformAdmin]
+      operationId: createTenant
+      summary: Create a tenant
+      description: Requires `platform_admin` role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTenantRequest'
+      responses:
+        '201':
+          description: Tenant created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [PlatformAdmin]
+      operationId: listTenants
+      summary: List tenants
+      description: Requires `platform_admin` role. Paginated.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Optional search on name or slug
+      responses:
+        '200':
+          description: Paginated tenant list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedTenants'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /tenants/{tenantId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [PlatformAdmin]
+      operationId: getTenant
+      summary: Get tenant by ID
+      responses:
+        '200':
+          description: Tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [PlatformAdmin]
+      operationId: updateTenant
+      summary: Update tenant (e.g. suspend)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchTenantRequest'
+      responses:
+        '200':
+          description: Updated tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [PlatformAdmin]
+      operationId: deleteTenant
+      summary: Delete tenant (soft-delete preferred)
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+    get:
+      tags: [Namespaces]
+      operationId: listNamespaces
+      summary: List namespaces for tenant
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: When false (default), omit soft-deleted namespaces (`deletedAt` set)
+      responses:
+        '200':
+          description: Paginated namespaces
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedNamespaces'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Namespaces]
+      operationId: createNamespace
+      summary: Create namespace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNamespaceRequest'
+      responses:
+        '201':
+          description: Namespace created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+    get:
+      tags: [Namespaces]
+      operationId: getNamespace
+      summary: Get namespace
+      parameters:
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: When false (default), return 404 if namespace is soft-deleted
+      responses:
+        '200':
+          description: Namespace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Namespaces]
+      operationId: updateNamespace
+      summary: Update namespace metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchNamespaceRequest'
+      responses:
+        '200':
+          description: Updated namespace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Namespaces]
+      operationId: deleteNamespace
+      summary: Delete namespace
+      description: |
+        **Default** (`permanent=false`): soft-delete — set `deletedAt`, retain data for restore.
+        **`permanent=true`**: hard-delete (requires `platform_admin`); cascade tables/versions/entries per product rule.
+      parameters:
+        - name: permanent
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+    post:
+      tags: [Namespaces]
+      operationId: restoreNamespace
+      summary: Restore soft-deleted namespace
+      description: Clears `deletedAt` / `deletedBy` when within retention policy.
+      responses:
+        '200':
+          description: Restored namespace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Namespace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+    get:
+      tags: [LookupTables]
+      operationId: listLookupTables
+      summary: List lookup tables in namespace
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: includeDeprecated
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: When false, omit tables with `isDeprecated` true
+        - name: hideExpired
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: |
+            When true, omit tables where **`expiresAt` is non-null** and **now (UTC) is on or after `expiresAt`** — identical to **`isExpired` == true** for each row.
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: When false (default), omit soft-deleted tables
+      responses:
+        '200':
+          description: Paginated lookup tables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedLookupTables'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [LookupTables]
+      operationId: createLookupTable
+      summary: Create lookup table
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLookupTableRequest'
+      responses:
+        '201':
+          description: Table created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookupTable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [LookupTables]
+      operationId: getLookupTable
+      summary: Get lookup table metadata
+      description: |
+        When `isDeprecated` is true, implementations **may** include `Deprecation: true` and `Sunset: <HTTP-date>` (RFC 8594) on the response for clients that detect sunset.
+      parameters:
+        - name: includeDeleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: When false (default), return 404 if table is soft-deleted
+      responses:
+        '200':
+          description: Table metadata
+          headers:
+            Deprecation:
+              required: false
+              schema:
+                type: string
+                example: 'true'
+              description: Present when the table is deprecated (optional)
+            Sunset:
+              required: false
+              schema:
+                type: string
+              description: HTTP-date aligned with `expiresAt` when set (optional, RFC 8594)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookupTable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [LookupTables]
+      operationId: updateLookupTable
+      summary: Update lookup table metadata
+      description: |
+        When the table is **expired** (`expiresAt` set and now UTC >= `expiresAt`), reject this request except **lift deprecation** or **extend/clear `expiresAt`** (otherwise **403** `TABLE_EXPIRED` or **410**). **`isDeprecated` alone does not block** PATCH.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchLookupTableRequest'
+      responses:
+        '200':
+          description: Updated table metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookupTable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+    delete:
+      tags: [LookupTables]
+      operationId: deleteLookupTable
+      summary: Delete lookup table
+      description: |
+        **Default** (`permanent=false`): soft-delete. **`permanent=true`**: hard-delete (`platform_admin`); cascade versions, entries, audits.
+      parameters:
+        - name: permanent
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [LookupTables]
+      operationId: restoreLookupTable
+      summary: Restore soft-deleted lookup table
+      responses:
+        '200':
+          description: Restored lookup table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LookupTable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [TableVersions]
+      operationId: listTableVersions
+      summary: List table versions
+      description: Newest first (by `versionNumber` or `_id`).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated table versions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedTableVersions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [TableVersions]
+      operationId: createTableVersion
+      summary: Create a new table version
+      description: |
+        Optional clone of current version entries. Sets table `currentVersionId` when `makeCurrent` is true (default).
+        Bulk import uses a separate `POST .../imports` path that creates a version when `mode=new_version`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTableVersionRequest'
+      responses:
+        '201':
+          description: Version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/versions/{versionId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [TableVersions]
+      operationId: getTableVersion
+      summary: Get table version metadata
+      responses:
+        '200':
+          description: Table version metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/imports:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Imports]
+      operationId: bulkImportTable
+      summary: Bulk upload entries from Excel
+      description: |
+        Multipart upload. **wide** — row 1 headers = keys, row 2 = values (string cells). **kv** — columns `Key` and `Value`, multiple rows.
+        **Worksheet:** default is the **first sheet** in workbook order (often "Sheet1"). Optional **`sheetName`** selects a sheet by name; **422** if not found.
+        **new_version** creates a new `lookup_table_versions` row and imports into it; **overwrite_current** replaces entries for the current version only.
+        Create an audit row (`lookup_import_audit`) for every attempt. Use `async=true` or `Prefer: respond-async` for large files (202 + audit id).
+      parameters:
+        - name: async
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: When true, return 202 and process in background (poll `GET .../imports/{auditId}`).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, mode, format]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: .xlsx file (OpenXML)
+                mode:
+                  $ref: '#/components/schemas/ImportMode'
+                format:
+                  $ref: '#/components/schemas/ImportFormat'
+                versionLabel:
+                  type: string
+                  description: Optional label when mode is new_version
+                sheetName:
+                  type: string
+                  description: Optional Excel worksheet name; default first sheet in file order
+            encoding:
+              file:
+                contentType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        '200':
+          description: Import completed synchronously
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkImportResult'
+        '202':
+          description: Import accepted for async processing
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of import audit record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkImportAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: Too many import requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    get:
+      tags: [Imports]
+      operationId: listImportAudits
+      summary: List import audit records for this table
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated import audits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedImportAudits'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/imports/{auditId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/ImportAuditId'
+    get:
+      tags: [Imports]
+      operationId: getImportAudit
+      summary: Get import audit detail
+      responses:
+        '200':
+          description: Import audit record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportAuditRecord'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/exports:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Exports]
+      operationId: exportLookupTable
+      summary: Export table version to Excel
+      description: |
+        Returns `.xlsx`. **wide** — one header row (keys), one data row (values). **kv** — two columns `Key`, `Value`, one row per entry.
+        **Allowed when table is expired** (read-only export) unless implementation restricts.
+      parameters:
+        - name: versionId
+          in: query
+          schema:
+            type: string
+          description: Table version to export; omit for **current** version
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [wide, kv]
+            default: wide
+          description: Sheet layout for export
+        - name: filename
+          in: query
+          schema:
+            type: string
+          description: Optional suggested download filename (without path)
+      responses:
+        '200':
+          description: Spreadsheet body
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/entries:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    get:
+      tags: [Entries]
+      operationId: listEntries
+      summary: List or search entries
+      description: |
+        Supports pagination and optional filters:
+        - `key` — exact match on entry key
+        - `keyPrefix` — keys starting with prefix (optional)
+        - `value` + `valueMatch` — filter by value; `partial` applies to string `valueString` only (see data model doc)
+        - `caseSensitive` — default false for partial string match on value
+        - **Cursor mode:** when `cursor` is set, **`page` is ignored**; use opaque `nextCursor` from prior response; sort **`_id` ascending** (see data model).
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Opaque cursor from previous `meta.nextCursor`; mutually exclusive with `page`
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Page size when using `cursor` (ignored when using `page`/`pageSize` without cursor—see implementation)
+        - name: key
+          in: query
+          schema:
+            type: string
+          description: Exact key match
+        - name: keyPrefix
+          in: query
+          schema:
+            type: string
+          description: Key starts with this prefix
+        - name: value
+          in: query
+          schema:
+            type: string
+          description: Value filter (interpreted with valueMatch)
+        - name: valueMatch
+          in: query
+          schema:
+            type: string
+            enum: [exact, partial]
+            default: exact
+          description: |
+            **exact** — equality on normalized string field when value is compared for strings.
+            **partial** — substring match for string values only; unsupported for non-string stored values (422 or empty set per implementation).
+        - name: caseSensitive
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: For partial (and optionally exact) string value comparison
+        - name: versionId
+          in: query
+          schema:
+            type: string
+          description: |
+            Limit to this table version. Omit to use the table's **current** version.
+            Mutating entry APIs always apply to the current version only.
+      responses:
+        '200':
+          description: Paginated entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedEntries'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Entries]
+      operationId: createEntry
+      summary: Create entry in the current table version
+      description: |
+        Always writes to `currentVersionId`. Duplicate key in that version returns **409**.
+        If table **`valueSchema`** is set, invalid **`value`** returns **422** (`VALIDATION_ERROR`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEntryRequest'
+      responses:
+        '201':
+          description: Entry created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/entries/bulk:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+    post:
+      tags: [Entries]
+      operationId: bulkUpsertEntries
+      summary: Bulk upsert entries (JSON)
+      description: |
+        Same **`new_version`** / **`overwrite_current`** semantics as Excel import. Writes **`lookup_import_audit`** with **`format: json`**.
+        Validate each **`value`** against table **`valueSchema`** when set (**422** `VALIDATION_ERROR`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkUpsertEntriesRequest'
+      responses:
+        '200':
+          description: Bulk operation finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkUpsertEntriesResult'
+        '202':
+          description: Accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkImportAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/entries/by-key/{key}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Exact entry key (URL-encoded if special characters)
+      - name: versionId
+        in: query
+        schema:
+          type: string
+        description: Table version to read from; default is current version
+    get:
+      tags: [Entries]
+      operationId: getEntryByKey
+      summary: Get entry by exact key
+      responses:
+        '200':
+          description: Entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tenants/{tenantId}/namespaces/{namespaceId}/tables/{tableId}/entries/{entryId}:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/NamespaceId'
+      - $ref: '#/components/parameters/TableId'
+      - $ref: '#/components/parameters/EntryId'
+      - name: versionId
+        in: query
+        schema:
+          type: string
+        description: If set, return 404 when entry.versionId does not match (optional consistency check)
+    get:
+      tags: [Entries]
+      operationId: getEntry
+      summary: Get entry by ID
+      responses:
+        '200':
+          description: Entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Entries]
+      operationId: updateEntry
+      summary: Update entry key and/or value
+      description: Only entries in the **current** table version can be updated. Historical entries are read-only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchEntryRequest'
+      responses:
+        '200':
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Entries]
+      operationId: deleteEntry
+      summary: Delete entry
+      description: Only entries in the **current** table version can be deleted.
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT per auth-tenant.md
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Tenant identifier (Mongo ObjectId string)
+    NamespaceId:
+      name: namespaceId
+      in: path
+      required: true
+      schema:
+        type: string
+    TableId:
+      name: tableId
+      in: path
+      required: true
+      schema:
+        type: string
+    EntryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: string
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Table version (Mongo ObjectId string)
+    ImportAuditId:
+      name: auditId
+      in: path
+      required: true
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional client request id; server may echo on responses and in error details (see observability.md)
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Optional distributed trace / correlation id
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Forbidden:
+      description: |
+        Not allowed for this tenant or role, **or** table **expired** (`expiresAt` set and now >= `expiresAt` UTC) blocks the mutation (`code`: **`TABLE_EXPIRED`**).
+        **`TABLE_DEPRECATED`** is reserved for a future optional “strict deprecation” mode (not used for write denial in the default product rule).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Gone:
+      description: |
+        Optional **single** choice alongside **403** for expired tables: use **either** 403 **`TABLE_EXPIRED`** **or** **410** in a deployment, not both with different semantics.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    Conflict:
+      description: Conflict (duplicate slug or key)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+    UnprocessableEntity:
+      description: |
+        Semantic validation failed (e.g. partial value search on non-string entries, entry `value` fails table **`valueSchema`**, bulk item validation).
+        Use `code` **`VALIDATION_ERROR`** when `valueSchema` rejects a payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+
+  schemas:
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: DUPLICATE_KEY
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+          nullable: true
+        totalPages:
+          type: integer
+          nullable: true
+        nextCursor:
+          type: string
+          nullable: true
+          description: Present for cursor-based page; null when no further items
+        limit:
+          type: integer
+          nullable: true
+          description: Page size used when `cursor` was supplied on entries list
+
+    TenantStatus:
+      type: string
+      enum: [active, suspended]
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TenantStatus'
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTenantRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        status:
+          $ref: '#/components/schemas/TenantStatus'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PatchTenantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/TenantStatus'
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PagedTenants:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    Namespace:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        deletedBy:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateNamespaceRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        description:
+          type: string
+
+    PatchNamespaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        description:
+          type: string
+
+    PagedNamespaces:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Namespace'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    ImportMode:
+      type: string
+      enum: [new_version, overwrite_current]
+    ImportFormat:
+      type: string
+      enum: [wide, kv, json]
+      description: |
+        **wide** / **kv**: Excel and export. **json**: JSON bulk upsert only (recorded on `lookup_import_audit`; no `.xlsx` file).
+
+    LookupTable:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        namespaceId:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        currentVersionId:
+          type: string
+          description: Active version for CRUD and default entry reads
+        currentVersionNumber:
+          type: integer
+        isDeprecated:
+          type: boolean
+          default: false
+        deprecatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: After this instant, mutations should be rejected unless deprecation is lifted or date extended
+        isExpired:
+          type: boolean
+          readOnly: true
+          description: |
+            true iff expiresAt is set and server now (UTC) is on or after expiresAt; if expiresAt is null, always false regardless of isDeprecated.
+        valueSchema:
+          type: object
+          nullable: true
+          description: |
+            Optional JSON Schema (draft 2020-12) for **`value`** validation; max ~32 KB serialized. When null, values are not schema-validated.
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Soft-delete timestamp; see lifecycle operations
+        deletedBy:
+          type: string
+          nullable: true
+          description: JWT `sub` when soft-deleted
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TableVersion:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        tableId:
+          type: string
+        versionNumber:
+          type: integer
+        label:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+          description: JWT sub of creator
+        source:
+          type: string
+          enum: [manual, bulk_upload, copy]
+        entryCount:
+          type: integer
+          nullable: true
+        importAuditId:
+          type: string
+          nullable: true
+          description: When created by bulk import, link to audit row
+
+    CreateTableVersionRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        cloneFromCurrent:
+          type: boolean
+          default: true
+          description: When true, copy entries from current version into the new version
+        makeCurrent:
+          type: boolean
+          default: true
+
+    PagedTableVersions:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TableVersion'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    BulkImportResult:
+      type: object
+      required: [auditId, tableId, targetVersionId, mode]
+      properties:
+        auditId:
+          type: string
+        tableId:
+          type: string
+        targetVersionId:
+          type: string
+        mode:
+          $ref: '#/components/schemas/ImportMode'
+        keysParsed:
+          type: integer
+        entriesWritten:
+          type: integer
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportAuditDetailItem'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportAuditDetailItem'
+
+    BulkImportAccepted:
+      type: object
+      required: [auditId, status]
+      properties:
+        auditId:
+          type: string
+        status:
+          type: string
+          example: pending
+
+    ImportAuditStatus:
+      type: string
+      enum: [pending, running, succeeded, failed, partial]
+
+    ImportAuditDetailItem:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        cell:
+          type: string
+          nullable: true
+          description: e.g. Sheet1!B2
+        key:
+          type: string
+          nullable: true
+
+    ImportAuditRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        tableId:
+          type: string
+        actorSub:
+          type: string
+        filename:
+          type: string
+          nullable: true
+          description: >-
+            Absent or placeholder when format is json (bulk JSON uploads).
+        fileSize:
+          type: integer
+          nullable: true
+        sha256:
+          type: string
+          nullable: true
+        mode:
+          $ref: '#/components/schemas/ImportMode'
+        format:
+          $ref: '#/components/schemas/ImportFormat'
+        status:
+          $ref: '#/components/schemas/ImportAuditStatus'
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        previousVersionId:
+          type: string
+          nullable: true
+        resultingVersionId:
+          type: string
+        stats:
+          type: object
+          properties:
+            keysParsed:
+              type: integer
+            entriesWritten:
+              type: integer
+            warningsCount:
+              type: integer
+            errorsCount:
+              type: integer
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportAuditDetailItem'
+
+    PagedImportAudits:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportAuditRecord'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    CreateLookupTableRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        description:
+          type: string
+        isDeprecated:
+          type: boolean
+          default: false
+        deprecatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        valueSchema:
+          type: object
+          nullable: true
+          description: Optional JSON Schema (draft 2020-12) for entry values; max ~32 KB
+
+    BulkUpsertEntriesRequest:
+      type: object
+      required: [mode, items]
+      properties:
+        mode:
+          $ref: '#/components/schemas/ImportMode'
+        versionLabel:
+          type: string
+          description: When mode is new_version
+        items:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            type: object
+            required: [key, value]
+            properties:
+              key:
+                type: string
+              value: {}
+
+    BulkUpsertEntriesResult:
+      type: object
+      required: [auditId, tableId, targetVersionId, mode, entriesWritten]
+      properties:
+        auditId:
+          type: string
+        tableId:
+          type: string
+        targetVersionId:
+          type: string
+        mode:
+          $ref: '#/components/schemas/ImportMode'
+        entriesWritten:
+          type: integer
+        keysFailed:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+
+    PatchLookupTableRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,62}$'
+        description:
+          type: string
+        isDeprecated:
+          type: boolean
+          description: Set false to clear deprecation lifecycle; pair with null dates if supported
+        deprecatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Send null to clear when clearing deprecation (JSON merge / PATCH semantics per implementation)
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Send null to remove scheduled sunset; must be >= deprecatedAt when both set
+        valueSchema:
+          type: object
+          nullable: true
+          description: JSON Schema for values; null removes validation
+
+    PagedLookupTables:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LookupTable'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+
+    EntryValue:
+      description: Any JSON-serializable value (string, number, boolean, object, array, null)
+      nullable: true
+
+    Entry:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        namespaceId:
+          type: string
+        tableId:
+          type: string
+        versionId:
+          type: string
+        key:
+          type: string
+        value: {}
+        valueType:
+          type: string
+          description: BSON high-level type hint (string, number, object, array, bool, null)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateEntryRequest:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value: {}
+
+    PatchEntryRequest:
+      type: object
+      properties:
+        key:
+          type: string
+        value: {}
+
+    PagedEntries:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entry'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
