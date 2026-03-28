@@ -4,7 +4,7 @@ Use this when adding or changing API behavior so documentation and tooling stay 
 
 ## 1. API contract
 
-- [ ] Edit [openapi.yaml](../openapi.yaml): paths, parameters, schemas, `info.description`, response examples.
+- [ ] Edit [`apps/api/openapi.yaml`](../../../apps/api/openapi.yaml): paths, parameters, schemas, `info.description`, response examples.
 - [ ] If auth or tenancy rules change, update [auth-tenant.md](../auth-tenant.md).
 
 ## 2. Persistence
@@ -22,11 +22,11 @@ Use this when adding or changing API behavior so documentation and tooling stay 
 
 ## 5. Samples and agent navigation
 
-- [ ] Update Postman requests in [postman/](../postman/) (paths, bodies, variables).
-- [ ] Update [scripts/seed/](../scripts/seed/) if collection shapes or demo IDs change; refresh seed README IDs for Postman.
+- [ ] Update Postman assets under [`apps/api/postman/`](../../../apps/api/postman/) (paths, bodies, variables).
+- [ ] Update [`apps/api/scripts/seed/`](../../../apps/api/scripts/seed/) if collection shapes or demo IDs change; refresh seed README IDs for Postman.
 - [ ] Update [spec-landscape.md](./spec-landscape.md) if ownership of a topic shifts.
 
 ## 6. Sanity
 
-- [ ] Run **`docs/lookup-service/tools`** tests: `npm install` then `npm test` (Node 18+), or `npm run test:lookup-docs` from repo root.
+- [ ] Run **`npm run test:contract`** from repo root (OpenAPI / Postman / seed checks).
 - [ ] Do not modify `.cursor/plans/` as product documentation.

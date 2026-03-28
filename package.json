@@ -4,9 +4,22 @@
   "workspaces": ["apps/*"],
   "scripts": {
     "dev": "npm run dev -w @lookup/api",
+    "dev:web": "npm run start -w @lookup/web",
     "build": "npm run build -w @lookup/api",
+    "build:web": "npm run build -w @lookup/web",
     "test": "npm run test -w @lookup/api",
+    "test:contract": "npm run test:contract -w @lookup/api",
     "test:functional": "npm run test:functional -w @lookup/api"
+  },
+  "overrides": {
+    "@angular/animations": "19.2.20",
+    "@angular/common": "19.2.20",
+    "@angular/compiler": "19.2.20",
+    "@angular/core": "19.2.20",
+    "@angular/forms": "19.2.20",
+    "@angular/platform-browser": "19.2.20",
+    "@angular/platform-browser-dynamic": "19.2.20",
+    "@angular/router": "19.2.20"
   },
   "engines": {
     "node": ">=20"

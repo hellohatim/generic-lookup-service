@@ -1,5 +1,6 @@
 import type { Db, ObjectId } from "mongodb";
-import { NotFoundError } from "../lib/errors.js";
+import { sysColl } from "../database/collections.js";
+import { NotFoundError } from "../utils/errors.js";
 
 export async function requireTenant(
   db: Db,
@@ -8,7 +9,7 @@ export async function requireTenant(
 ) {
   const q: Record<string, unknown> = { _id: tenantId };
   if (!opts?.includeDeleted) q.deletedAt = null;
-  const t = await db.collection("tenants").findOne(q);
+  const t = await db.collection(sysColl.tenants).findOne(q);
   if (!t) throw new NotFoundError("NOT_FOUND", "Tenant not found");
   return t as Record<string, unknown> & { _id: ObjectId };
 }
@@ -24,7 +25,7 @@ export async function requireNamespace(
     tenantId,
   };
   if (!opts?.includeDeleted) q.deletedAt = null;
-  const n = await db.collection("namespaces").findOne(q);
+  const n = await db.collection(sysColl.namespaces).findOne(q);
   if (!n) throw new NotFoundError("NOT_FOUND", "Namespace not found");
   return n as Record<string, unknown> & { _id: ObjectId };
 }
@@ -42,7 +43,7 @@ export async function requireTable(
     namespaceId,
   };
   if (!opts?.includeDeleted) q.deletedAt = null;
-  const t = await db.collection("lookup_tables").findOne(q);
+  const t = await db.collection(sysColl.lookupTables).findOne(q);
   if (!t) throw new NotFoundError("NOT_FOUND", "Table not found");
   return t as Record<string, unknown> & { _id: ObjectId; currentVersionId: ObjectId };
 }

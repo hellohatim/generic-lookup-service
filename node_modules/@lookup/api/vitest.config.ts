@@ -6,5 +6,7 @@ export default defineConfig({
     fileParallelism: false,
     testTimeout: 120_000,
     hookTimeout: 120_000,
+    /** Contract checks use Node's built-in `node:test` via `npm run test:contract` */
+    exclude: ["**/node_modules/**", "**/dist/**", "**/scripts/**"],
   },
 });

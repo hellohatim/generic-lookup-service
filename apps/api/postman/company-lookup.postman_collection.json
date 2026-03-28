@@ -1,0 +1,69 @@
+{
+  "info": {
+    "name": "Company lookup (10k seed demo)",
+    "description": "1. Start API with MongoDB (`MONGODB_URI`, `MONGODB_DB`).\n2. From `apps/api`: `npm run seed:company`.\n3. Paste printed IDs into collection variables below.\n4. Run folder **Entries** (sample GET + search). Keys: `CN00000001` … `CN00010000`; value: `{ name, street1, street2, city, zipcode }`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": { "type": "noauth" },
+  "item": [
+    {
+      "name": "Entries",
+      "description": "OpenAPI tag: Entries — against seeded `companies` table.",
+      "item": [
+        {
+          "name": "Get entry by key CN00000001",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('one row', () => j.items && j.items.length === 1 && j.items[0].key === 'CN00000001');",
+                  "const v = j.items[0].value;",
+                  "pm.test('company shape', () => v && v.name && v.street1 && v.city && v.zipcode);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?key=CN00000001&pageSize=1"
+          }
+        },
+        {
+          "name": "Search by city (valuePath)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('results', () => Array.isArray(j.items));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": {\n    \"kind\": \"valuePath\",\n    \"path\": \"city\",\n    \"value\": \"Springfield\",\n    \"match\": \"exact\"\n  },\n  \"page\": 1,\n  \"pageSize\": 5\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:3000/lookup/v1" },
+    { "key": "tenantId", "value": "" },
+    { "key": "namespaceId", "value": "" },
+    { "key": "tableId", "value": "" }
+  ]
+}

@@ -1,6 +1,7 @@
 {
   "info": {
-    "name": "Lookup API functional",
+    "name": "Lookup API functional (by OpenAPI tags)",
+    "description": "Folders match OpenAPI tags: PlatformAdmin, Namespaces, LookupTables, TableVersions, Entries, Imports, Exports. Run Setup first. For 10k company demo (`npm run seed:company`), use `postman/company-lookup.postman_collection.json`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": { "type": "noauth" },
@@ -19,237 +20,605 @@
   ],
   "item": [
     {
-      "name": "Create tenant",
-      "event": [
+      "name": "Setup",
+      "description": "Creates tenant, namespace, and table used by the rest of this collection.",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 201', () => pm.response.to.have.status(201));",
-              "const j = pm.response.json();",
-              "pm.collectionVariables.set('tenantId', j.id);"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"Functional\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
-        },
-        "url": "{{baseUrl}}/tenants"
-      }
-    },
-    {
-      "name": "Create namespace",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 201', () => pm.response.to.have.status(201));",
-              "const j = pm.response.json();",
-              "pm.collectionVariables.set('namespaceId', j.id);"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"NS\",\n  \"slug\": \"ns-func\"\n}"
-        },
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces"
-      }
-    },
-    {
-      "name": "Create table",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 201', () => pm.response.to.have.status(201));",
-              "const j = pm.response.json();",
-              "pm.collectionVariables.set('tableId', j.id);",
-              "pm.collectionVariables.set('versionId', j.currentVersionId);"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"T\",\n  \"slug\": \"tbl-func\"\n}"
-        },
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables"
-      }
-    },
-    {
-      "name": "Create entry",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 201', () => pm.response.to.have.status(201));"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"key\": \"from-postman\",\n  \"value\": \"hello\"\n}"
-        },
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries"
-      }
-    },
-    {
-      "name": "Get entry by key",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "pm.test('key matches', () => pm.response.json().key === 'from-postman');"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/by-key/from-postman"
-      }
-    },
-    {
-      "name": "Bulk JSON upsert",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "const j = pm.response.json();",
-              "pm.test('auditId', () => j.auditId);",
-              "if (j.auditId) pm.collectionVariables.set('importAuditId', j.auditId);"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"mode\": \"overwrite_current\",\n  \"items\": [\n    { \"key\": \"bulk-a\", \"value\": 1 },\n    { \"key\": \"bulk-b\", \"value\": \"two\" }\n  ]\n}"
-        },
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/bulk"
-      }
-    },
-    {
-      "name": "List entries offset",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "const j = pm.response.json();",
-              "pm.test('items array', () => Array.isArray(j.items));"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?page=1&pageSize=20"
-      }
-    },
-    {
-      "name": "Excel import",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "const j = pm.response.json();",
-              "pm.test('audit', () => j.auditId && j.entriesWritten >= 1);"
-            ],
-            "type": "text/javascript"
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "body": {
-          "mode": "formdata",
-          "formdata": [
+          "name": "Create tenant",
+          "event": [
             {
-              "key": "file",
-              "type": "file",
-              "src": "{{xlsxPath}}"
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('tenantId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Functional\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
             },
-            { "key": "mode", "value": "overwrite_current", "type": "text" },
-            { "key": "format", "value": "kv", "type": "text" }
+            "url": "{{baseUrl}}/tenants"
+          }
+        },
+        {
+          "name": "Create namespace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('namespaceId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"NS\",\n  \"slug\": \"ns-func\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces"
+          }
+        },
+        {
+          "name": "Create table",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('tableId', j.id);",
+                  "pm.collectionVariables.set('versionId', j.currentVersionId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"T\",\n  \"slug\": \"tbl-func\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables"
+          }
+        }
+      ]
+    },
+    {
+      "name": "PlatformAdmin",
+      "description": "OpenAPI tag: PlatformAdmin — tenants.",
+      "item": [
+        {
+          "name": "List tenants",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('has items', () => Array.isArray(j.items));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get tenant by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('id matches', () => j.id === pm.collectionVariables.get('tenantId'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Namespaces",
+      "description": "OpenAPI tag: Namespaces.",
+      "item": [
+        {
+          "name": "List namespaces",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('has items', () => Array.isArray(j.items) && j.items.length >= 1);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get namespace by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('id matches', () => j.id === pm.collectionVariables.get('namespaceId'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LookupTables",
+      "description": "OpenAPI tag: LookupTables.",
+      "item": [
+        {
+          "name": "List tables",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('has items', () => Array.isArray(j.items) && j.items.length >= 1);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get table by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('id matches', () => j.id === pm.collectionVariables.get('tableId'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TableVersions",
+      "description": "OpenAPI tag: TableVersions.",
+      "item": [
+        {
+          "name": "List versions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('has items', () => Array.isArray(j.items) && j.items.length >= 1);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/versions?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get version by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('id matches', () => j.id === pm.collectionVariables.get('versionId'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/versions/{{versionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Entries",
+      "description": "OpenAPI tag: Entries — CRUD, list, search, bulk.",
+      "item": [
+        {
+          "name": "Create entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.collectionVariables.set('entryId', j.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"from-postman\",\n  \"value\": \"hello\"\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries"
+          }
+        },
+        {
+          "name": "Get entry by id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('key', () => j.key === 'from-postman');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/{{entryId}}"
+          }
+        },
+        {
+          "name": "Get entry by key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('one item with key', () => j.items && j.items.length === 1 && j.items[0].key === 'from-postman');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?key=from-postman&pageSize=1"
+          }
+        },
+        {
+          "name": "Complex search (query tree)",
+          "item": [
+            {
+              "name": "CS — seed object entry",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"key\": \"cs-nested\",\n  \"value\": {\n    \"region\": \"EU\",\n    \"meta\": { \"code\": \"X1\" },\n    \"label\": \"alpha\"\n  }\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries"
+              }
+            },
+            {
+              "name": "CS — leaf keyExact",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test('200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "pm.test('items', () => Array.isArray(j.items) && j.items.length >= 1 && j.items.some((x) => x.key === 'from-postman'));"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": { \"kind\": \"keyExact\", \"key\": \"from-postman\" },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — leaf keyPrefix",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": { \"kind\": \"keyPrefix\", \"prefix\": \"from-\" },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — leaf valueRoot partial",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"kind\": \"valueRoot\",\n    \"value\": \"hell\",\n    \"match\": \"partial\"\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — leaf valuePath",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"kind\": \"valuePath\",\n    \"path\": \"region\",\n    \"value\": \"EU\",\n    \"match\": \"exact\"\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — AND keyPrefix + valuePath",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"op\": \"and\",\n    \"clauses\": [\n      { \"kind\": \"keyPrefix\", \"prefix\": \"cs-\" },\n      {\n        \"kind\": \"valuePath\",\n        \"path\": \"meta.code\",\n        \"value\": \"X1\",\n        \"match\": \"exact\"\n      }\n    ]\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — OR two valuePaths",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"op\": \"or\",\n    \"clauses\": [\n      {\n        \"kind\": \"valuePath\",\n        \"path\": \"region\",\n        \"value\": \"EU\",\n        \"match\": \"exact\"\n      },\n      {\n        \"kind\": \"valuePath\",\n        \"path\": \"region\",\n        \"value\": \"US\",\n        \"match\": \"exact\"\n      }\n    ]\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — OR with nested AND",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"op\": \"or\",\n    \"clauses\": [\n      {\n        \"op\": \"and\",\n        \"clauses\": [\n          {\n            \"kind\": \"valuePath\",\n            \"path\": \"meta.code\",\n            \"value\": \"X1\",\n            \"match\": \"exact\"\n          },\n          {\n            \"kind\": \"valuePath\",\n            \"path\": \"label\",\n            \"value\": \"alpha\",\n            \"match\": \"exact\"\n          }\n        ]\n      },\n      { \"kind\": \"keyExact\", \"key\": \"nonexistent-key\" }\n    ]\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            },
+            {
+              "name": "CS — OR valueRoot vs keyExact",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": {\n    \"op\": \"or\",\n    \"clauses\": [\n      {\n        \"kind\": \"valueRoot\",\n        \"value\": \"hello\",\n        \"match\": \"partial\"\n      },\n      { \"kind\": \"keyExact\", \"key\": \"cs-nested\" }\n    ]\n  },\n  \"page\": 1,\n  \"pageSize\": 10\n}"
+                },
+                "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/search"
+              }
+            }
           ]
         },
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports"
-      }
-    },
-    {
-      "name": "Get import audit",
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));"
-            ],
-            "type": "text/javascript"
+          "name": "Bulk JSON upsert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('auditId', () => j.auditId);",
+                  "if (j.auditId) pm.collectionVariables.set('importAuditId', j.auditId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"overwrite_current\",\n  \"items\": [\n    { \"key\": \"bulk-a\", \"value\": 1 },\n    { \"key\": \"bulk-b\", \"value\": \"two\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries/bulk"
+          }
+        },
+        {
+          "name": "List entries offset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('items array', () => Array.isArray(j.items));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/entries?page=1&pageSize=20"
           }
         }
-      ],
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports/{{importAuditId}}"
-      }
+      ]
     },
     {
-      "name": "Export xlsx",
-      "event": [
+      "name": "Imports",
+      "description": "OpenAPI tag: Imports.",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test('Status 200', () => pm.response.to.have.status(200));",
-              "pm.test('content type', () => pm.response.headers.get('Content-Type').includes('spreadsheet'));"
-            ],
-            "type": "text/javascript"
+          "name": "Excel import",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('audit', () => j.auditId && j.entriesWritten >= 1);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{xlsxPath}}"
+                },
+                { "key": "mode", "value": "overwrite_current", "type": "text" },
+                { "key": "format", "value": "kv", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports"
+          }
+        },
+        {
+          "name": "Get import audit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/imports/{{importAuditId}}"
           }
         }
-      ],
-      "request": {
-        "method": "GET",
-        "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/exports?format=wide&filename=fn"
-      }
+      ]
+    },
+    {
+      "name": "Exports",
+      "description": "OpenAPI tag: Exports.",
+      "item": [
+        {
+          "name": "Export xlsx",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('content type', () => pm.response.headers.get('Content-Type').includes('spreadsheet'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/tenants/{{tenantId}}/namespaces/{{namespaceId}}/tables/{{tableId}}/exports?format=flat_object&filename=fn"
+          }
+        }
+      ]
     }
   ],
   "variable": [
@@ -259,6 +628,7 @@
     { "key": "namespaceId", "value": "" },
     { "key": "tableId", "value": "" },
     { "key": "versionId", "value": "" },
+    { "key": "entryId", "value": "" },
     { "key": "importAuditId", "value": "" },
     { "key": "xlsxPath", "value": "" }
   ]

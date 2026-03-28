@@ -1,0 +1,30 @@
+.app-frame {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: #263238;
+  color: #fff;
+}
+
+.brand {
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+}
+
+.sub {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+main {
+  flex: 1;
+  background: #fafafa;
+}

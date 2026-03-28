@@ -1,0 +1,23 @@
+.pad {
+  padding: 1rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.full {
+  width: 100%;
+}
+
+.empty {
+  padding: 1rem;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+mat-spinner {
+  margin: 2rem auto;
+  display: block;
+}

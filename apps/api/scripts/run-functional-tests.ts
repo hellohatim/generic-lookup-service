@@ -11,7 +11,7 @@ import ExcelJS from "exceljs";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { MongoClient } from "mongodb";
 import { createApp } from "../src/app.js";
-import { ensureIndexes } from "../src/db/ensureIndexes.js";
+import { ensureIndexes } from "../src/database/ensureIndexes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");

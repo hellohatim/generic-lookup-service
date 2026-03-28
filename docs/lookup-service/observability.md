@@ -1,6 +1,6 @@
 # Observability — Generic multi-tenant lookup service
 
-Conventions for **request correlation**, **structured logging**, and **metrics** in API implementations. Pair with [openapi.yaml](./openapi.yaml) (`X-Request-Id`, `X-Correlation-Id` parameters).
+Conventions for **request correlation**, **structured logging**, and **metrics** in API implementations. Pair with [`apps/api/openapi.yaml`](../../apps/api/openapi.yaml) (`X-Request-Id`, `X-Correlation-Id` parameters).
 
 ---
 
@@ -48,7 +48,7 @@ Names are suggestions; use your organization’s prefix and cardinality rules.
 |--------|------|-------------------|---------|
 | `lookup_http_requests_total` | counter | `method`, `route`, `status` | Traffic |
 | `lookup_http_request_duration_seconds` | histogram | `route` | Latency |
-| `lookup_entries_list_duration_seconds` | histogram | | Entry list cost |
+| `lookup_entry_list_duration_seconds` | histogram | | Entry list cost (query against one version’s physical collection) |
 | `lookup_import_duration_seconds` | histogram | `format` (wide/kv/json) | Import / bulk duration |
 | `lookup_import_failures_total` | counter | `reason` | Failed imports |
 | `lookup_bulk_json_entries_written_total` | counter | | Bulk JSON throughput |

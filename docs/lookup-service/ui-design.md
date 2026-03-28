@@ -1,6 +1,6 @@
 # UI design — Generic multi-tenant lookup service
 
-Information architecture, key screens, **table-detail** search UX, and **empty/error** states. Align with existing repo patterns (Angular 7 + Bootstrap 3, see root `package.json`) if this UI is built in this workspace; otherwise treat this as stack-agnostic product UX.
+Information architecture, key screens, **table-detail** search UX, and **empty/error** states. The reference UI in the monorepo is [**`apps/web`**](../../apps/web) (**Angular**, standalone components, **Angular Material**). Use a **dev-server proxy** to `/lookup/v1` so the browser avoids CORS against the API (see [implementation.md](./implementation.md)).
 
 ---
 
@@ -96,7 +96,7 @@ flowchart LR
 |---------|----------|
 | **Version dropdown** | Load `GET .../tables/{tableId}/versions`; show `versionNumber`, optional `label`, date. **Current** marked (matches table `currentVersionId`). |
 | **Default** | Current version: full toolbar including **Add entry**, **Edit**, **Delete**, **Import** — **unless table is expired** (then read-only). |
-| **Historical version** | Read-only grid: hide add/edit/delete; pass `versionId` on `GET .../entries` and when opening by-key. Show banner: “Viewing version N (read-only).” |
+| **Historical version** | Read-only grid: hide add/edit/delete; pass `versionId` on `GET .../entries` (including key lookups like `?key=&pageSize=1`). Show banner: “Viewing version N (read-only).” |
 
 ### Tabs (optional layout)
 
@@ -117,9 +117,14 @@ flowchart LR
 | **Add entry** | Opens entry editor (**current** version only). |
 | **Import Excel** | Opens bulk import modal. |
 | **Bulk JSON** | Opens modal or drawer posting `POST .../entries/bulk` (mode + items array). |
-| **Export** | Download **`GET .../exports`** (wide or kv `.xlsx`). |
+| **Export** | Download **`GET .../exports`**; offer **`format`:** **Wide**, **Key/Value** (`kv`), or **Flat object (tabular)** (`flat_object` — columns `key`, top-level object fields, `_scalar`). Default product choice can favor **flat_object** for object-shaped values. |
 
 **String-only hint:** When **Contains** is selected, show helper text: “Partial match applies to **string** values.” If API returns **422** for unsupported type filter, show toast with message from `ApiError.message`.
+
+### Advanced search (optional)
+
+- For power users, **`POST .../entries/search`** accepts a recursive **`query`** tree: **AND** / **OR** over leaves **`keyExact`**, **`keyPrefix`**, **`valueRoot`** (root string / `valueString`), **`valuePath`** (nested dot path). See OpenAPI and [README.md](./README.md) search summary.
+- The default toolbar above stays mapped to **`GET .../entries`** query params for simplicity.
 
 ### Grid
 
@@ -135,7 +140,7 @@ flowchart LR
 
 ### Optional: get by key shortcut
 
-- Link “Open by key” or use `GET .../entries/by-key/{key}` when user pastes full key (handle URL-encoding for special characters).
+- Link “Open by key” or use `GET .../entries?key={key}&pageSize=1` (URL-encode the key as a query value when needed).
 
 ---
 
@@ -144,7 +149,7 @@ flowchart LR
 | Field / control | Behavior |
 |-----------------|----------|
 | **File** | `.xlsx` only; client-side max-size hint aligned with API. |
-| **Format** | Radio: **Wide** (row 1 = keys, row 2 = string values) vs **Key/Value** sheet (columns `Key`, `Value`, many rows). Link to downloadable templates. |
+| **Format** | Radio: **Wide** (row 1 = keys, row 2 = values) vs **Key/Value** (`Key`, `Value` columns, many rows) vs **Flat object** (`flat_object`: row 1 = `key` + one column per top-level `value` field + `_scalar`). Link to downloadable templates. |
 | **Sheet name** | Optional (advanced); default **first worksheet** in file. |
 | **Mode** | Radio: **New version** (default) vs **Overwrite current**. Short helper: new version preserves history; overwrite replaces entries on current version only. |
 | **Version label** | Optional text when mode is **New version** (maps to API `versionLabel`). |
@@ -205,7 +210,7 @@ flowchart LR
 9. **Tenant user:** Mark table **deprecated** with a future **expires at**; see banner and list badge; **before expiry**, mutations remain enabled (default API: **`isDeprecated`** does not block writes).
 10. **Tenant user:** After **expiry**, confirm **writes** blocked (403 or 410) and UI disables **import**, **bulk JSON**, and entry edits; **reads** and **export** still work.
 11. **Tenant user:** **Lift deprecation** or **extend expires at** via table settings; confirm mutations work again.
-12. **Tenant user:** **Export** current or pinned version as `.xlsx` (wide or kv).
+12. **Tenant user:** **Export** current or pinned version as `.xlsx` (**wide**, **kv**, or **flat_object** tabular).
 13. **Tenant user:** **Bulk JSON** upsert (new version or overwrite); see audit row with **`format: json`**.
 14. **Tenant user:** Large table: **Load more** via **cursor** pagination until `nextCursor` is null.
 15. **Operator:** Soft-delete a table or namespace, **restore** from trash, or **permanent delete** when allowed.

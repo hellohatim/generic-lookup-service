@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { logger } from "../logger.js";
+import { logger } from "../config/logger.js";
 
 export const requestLogMiddleware: RequestHandler = (req, res, next) => {
   const start = Date.now();

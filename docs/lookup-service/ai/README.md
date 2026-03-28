@@ -1,6 +1,6 @@
 # AI and maintainer knowledge map
 
-Use this folder as a **navigation index** for the lookup-service **design package** (no runtime backend lives in this repo). The authoritative API contract is [openapi.yaml](../openapi.yaml); persistence is [mongodb-data-model.md](../mongodb-data-model.md); product UX is [ui-design.md](../ui-design.md).
+Use this folder as a **navigation index** for the lookup-service **design package**. The reference API lives in [`apps/api`](../../../apps/api); the authoritative OpenAPI file is [`apps/api/openapi.yaml`](../../../apps/api/openapi.yaml). Persistence is [mongodb-data-model.md](../mongodb-data-model.md); product UX is [ui-design.md](../ui-design.md).
 
 ## Files in this folder
 
@@ -12,9 +12,8 @@ Use this folder as a **navigation index** for the lookup-service **design packag
 
 ## Quick rules
 
-1. **OpenAPI first** — add or change paths, schemas, and descriptions in `openapi.yaml`, then align Mongo and UI docs.
+1. **OpenAPI first** — add or change paths, schemas, and descriptions in `apps/api/openapi.yaml`, then align Mongo and UI docs.
 2. **Deprecation vs expiry** — `isDeprecated` alone does **not** block writes in the default product rule; **expired** means `expiresAt` is set and server now (UTC) is on or after `expiresAt` (see `info.description` in OpenAPI).
-3. **Tooling** — After API changes, update [postman/](../postman/) requests and [scripts/seed/](../scripts/seed/) if sample data shapes change.
-4. **Copilot** — Repository hints for GitHub Copilot live in [.github/copilot-instructions.md](../../../.github/copilot-instructions.md) at repo root.
+3. **Tooling** — After API changes, update [`apps/api/postman/`](../../../apps/api/postman/) and [`apps/api/scripts/seed/`](../../../apps/api/scripts/seed/) if sample data shapes change; run `npm run test:contract`.
 
 Do not treat `.cursor/plans/` files as product spec unless the user explicitly asks to implement a plan.

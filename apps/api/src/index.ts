@@ -1,9 +1,9 @@
 import "express-async-errors";
 import { MongoClient } from "mongodb";
-import { config } from "./config.js";
-import { logger } from "./logger.js";
+import { config } from "./config/env.js";
+import { logger } from "./config/logger.js";
 import { createApp } from "./app.js";
-import { ensureIndexes } from "./db/ensureIndexes.js";
+import { ensureIndexes } from "./database/ensureIndexes.js";
 
 process.on("unhandledRejection", (reason) => {
   logger.error({ reason }, "unhandledRejection");

@@ -22,18 +22,23 @@ Default connection: `mongodb://127.0.0.1:27017` (see [`apps/api/.env.example`](a
 
 | Package | Description |
 |---------|-------------|
-| [`apps/api`](apps/api) | REST API — Express + TypeScript + MongoDB, contract validated with `express-openapi-validator` against [`docs/lookup-service/openapi.yaml`](docs/lookup-service/openapi.yaml) |
-| [`apps/web`](apps/web) | UI placeholder (Angular to be added later) |
+| [`apps/api`](apps/api) | REST API — Express + TypeScript + MongoDB, contract validated with `express-openapi-validator` against [`apps/api/openapi.yaml`](apps/api/openapi.yaml) |
+| [`apps/web`](apps/web) | **Angular** admin UI — tenants, namespaces, tables, entries (Material); uses **`proxy.conf.json`** to reach the API at `/lookup/v1` |
 
 ## Commands (from repo root)
 
 ```bash
 npm install
 npm run dev          # API dev server (tsx watch)
+npm run dev:web      # Angular dev server (port 4200) with proxy to API — run API separately on :3000
 npm run build        # compile API
+npm run build:web    # production build of the Angular app (output under apps/web/dist)
 npm run test         # Vitest: unit + integration (downloads Mongo binary on first run)
+npm run test:contract   # OpenAPI / Postman JSON / seed script sanity (node:test)
 npm run test:functional   # Newman Postman collection against ephemeral in-memory API
 ```
+
+Web app details: [`apps/web/README.md`](apps/web/README.md).
 
 ## Security note
 

@@ -1,6 +1,6 @@
 # Authentication and tenant authorization
 
-This document defines **JWT claims**, **tenant resolution** (path-scoped vs token-only URLs), and **roles** (`platform_admin` vs `tenant_user`) for the Generic Multi-Tenant Lookup Service. It pairs with [openapi.yaml](./openapi.yaml) and [mongodb-data-model.md](./mongodb-data-model.md).
+This document defines **JWT claims**, **tenant resolution** (path-scoped vs token-only URLs), and **roles** (`platform_admin` vs `tenant_user`) for the Generic Multi-Tenant Lookup Service. It pairs with [`apps/api/openapi.yaml`](../../apps/api/openapi.yaml) and [mongodb-data-model.md](./mongodb-data-model.md).
 
 ---
 
@@ -15,8 +15,8 @@ Invalid or missing tokens → **401** with `ApiError` body (see OpenAPI `ApiErro
 
 ## Audit and attribution (bulk import)
 
-- Each **`lookup_import_audit`** document stores **`actorSub`** = JWT **`sub`** of the caller who submitted `POST .../imports`.
-- **`lookup_table_versions.createdBy`** should use the same **`sub`** when a version is created manually or via import (see [mongodb-data-model.md](./mongodb-data-model.md)).
+- Each **`sys_lookup_import_audit`** document stores **`actorSub`** = JWT **`sub`** of the caller who submitted `POST .../imports`.
+- **`sys_lookup_table_versions.createdBy`** should use the same **`sub`** when a version is created manually or via import (see [mongodb-data-model.md](./mongodb-data-model.md)).
 - Service accounts used for automation should use distinct `sub` values so audits remain attributable.
 
 ---

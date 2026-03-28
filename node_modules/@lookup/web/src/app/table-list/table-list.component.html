@@ -1,0 +1,64 @@
+<mat-toolbar color="primary">
+  <a mat-button [routerLink]="['/tenants', tenantId, 'namespaces']">
+    <mat-icon>arrow_back</mat-icon>
+    Namespaces
+  </a>
+  <span class="title">Lookup tables</span>
+  <span class="spacer"></span>
+  <button mat-flat-button color="accent" (click)="openCreate()">
+    <mat-icon>add</mat-icon>
+    Create table
+  </button>
+</mat-toolbar>
+
+<div class="pad">
+  @if (loading) {
+    <mat-spinner diameter="40" />
+  } @else {
+    <mat-card>
+      <table mat-table [dataSource]="tables" class="full">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Name</th>
+          <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+        </ng-container>
+        <ng-container matColumnDef="slug">
+          <th mat-header-cell *matHeaderCellDef>Slug</th>
+          <td mat-cell *matCellDef="let row"><code>{{ row.slug }}</code></td>
+        </ng-container>
+        <ng-container matColumnDef="badges">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let row">
+            @if (row.isExpired) {
+              <span class="badge expired">Expired</span>
+            } @else if (row.isDeprecated) {
+              <span class="badge warn">Deprecated</span>
+            }
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let row">
+            <a
+              mat-button
+              [routerLink]="[
+                '/tenants',
+                tenantId,
+                'namespaces',
+                namespaceId,
+                'tables',
+                row.id,
+                'entries'
+              ]"
+              >Entries</a
+            >
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+      </table>
+      @if (tables.length === 0) {
+        <p class="empty">No tables yet.</p>
+      }
+    </mat-card>
+  }
+</div>

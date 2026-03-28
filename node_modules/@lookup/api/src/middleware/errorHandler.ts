@@ -1,7 +1,7 @@
 import type { ErrorRequestHandler } from "express";
 import type { HttpError } from "http-errors";
-import { logger } from "../logger.js";
-import { AppError } from "../lib/errors.js";
+import { logger } from "../config/logger.js";
+import { AppError } from "../utils/errors.js";
 
 function isOpenApiValidationError(err: unknown): err is { status?: number; errors?: unknown[] } {
   return (
