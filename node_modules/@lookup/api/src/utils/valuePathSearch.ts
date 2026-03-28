@@ -57,6 +57,79 @@ export function parseMatch(m: string | undefined): "exact" | "partial" {
   return "exact";
 }
 
+/** Drill into `value` following dot segments; expression root is `$value`. */
+function valueDrillExpr(parts: string[]): unknown {
+  let expr: unknown = "$value";
+  for (const seg of parts) {
+    expr = { $getField: { field: seg, input: expr } };
+  }
+  return expr;
+}
+
+/** $expr predicate: string field ref (e.g. "$$pair.v") matches user string. */
+function exprStringMatchOnRef(
+  fieldRef: string,
+  valueQ: string,
+  match: "exact" | "partial",
+  caseSensitive: boolean
+): unknown {
+  if (match === "partial") {
+    return {
+      $regexMatch: {
+        input: fieldRef,
+        regex: escapeRegex(valueQ),
+        options: caseSensitive ? "" : "i",
+      },
+    };
+  }
+  return caseSensitive
+    ? { $eq: [fieldRef, valueQ] }
+    : { $eq: [{ $toLower: fieldRef }, valueQ.toLowerCase()] };
+}
+
+/**
+ * Match `value.<path>` as today, OR any **immediate** string child under that sub-object
+ * (useful when the user types a path prefix and data lives one level deeper).
+ */
+export function buildValuePathLookaheadClause(
+  pathParts: string[],
+  valueQ: string,
+  match: "exact" | "partial",
+  caseSensitive: boolean
+): Record<string, unknown> {
+  const dotted = mongoFieldForValuePath(pathParts);
+  const leafCond = mongoConditionForStringMatch(valueQ, match, caseSensitive);
+  const drill = valueDrillExpr(pathParts);
+  const childMatch = exprStringMatchOnRef("$$pair.v", valueQ, match, caseSensitive);
+
+  const scanChildren = {
+    $gt: [
+      {
+        $size: {
+          $filter: {
+            input: {
+              $cond: {
+                if: { $eq: [{ $type: drill }, "object"] },
+                then: { $objectToArray: drill },
+                else: [],
+              },
+            },
+            as: "pair",
+            cond: {
+              $and: [{ $eq: [{ $type: "$$pair.v" }, "string"] }, childMatch],
+            },
+          },
+        },
+      },
+      0,
+    ],
+  };
+
+  return {
+    $or: [{ [dotted]: leafCond }, { $expr: scanChildren }],
+  };
+}
+
 /**
  * Mongo filter for entry list / search.
  * - Root `value` search uses `valueString` / `valueType` (primitive string storage).
@@ -71,6 +144,8 @@ export function buildEntriesListMongoFilter(opts: {
   legacyCaseSensitive?: boolean;
   /** With legacyValue: search this path under `value` instead of valueString */
   valuePath?: string;
+  /** `exact` — single dotted field; `lookahead` — that field OR any immediate string child under it */
+  valuePathMode?: "exact" | "lookahead";
   /** Additional path filters (AND) */
   valuePathFilters?: ValuePathFilterInput[];
 }): Record<string, unknown> {
@@ -100,15 +175,23 @@ export function buildEntriesListMongoFilter(opts: {
 
   if (hasLegacyValue && valuePathTrimmed) {
     const parts = normalizeValuePath(valuePathTrimmed);
-    const field = mongoFieldForValuePath(parts);
     const match = parseMatch(opts.legacyValueMatch);
-    clauses.push({
-      [field]: mongoConditionForStringMatch(
-        opts.legacyValue as string,
-        match,
-        opts.legacyCaseSensitive ?? false
-      ),
-    });
+    const caseSensitive = opts.legacyCaseSensitive ?? false;
+    const mode = opts.valuePathMode ?? "exact";
+    if (mode === "lookahead") {
+      clauses.push(
+        buildValuePathLookaheadClause(parts, opts.legacyValue as string, match, caseSensitive)
+      );
+    } else {
+      const field = mongoFieldForValuePath(parts);
+      clauses.push({
+        [field]: mongoConditionForStringMatch(
+          opts.legacyValue as string,
+          match,
+          caseSensitive
+        ),
+      });
+    }
   } else if (hasLegacyValue) {
     const match = parseMatch(opts.legacyValueMatch);
     const caseSensitive = opts.legacyCaseSensitive ?? false;

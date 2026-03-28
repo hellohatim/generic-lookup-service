@@ -138,6 +138,8 @@ export class LookupApiService {
       value?: string;
       valueMatch?: 'exact' | 'partial';
       valuePath?: string;
+      /** With valuePath + value: exact field only vs also immediate string children under that object */
+      valuePathMode?: 'exact' | 'lookahead';
       versionId?: string;
       caseSensitive?: boolean;
     }
@@ -160,6 +162,9 @@ export class LookupApiService {
     }
     if (opts.valuePath?.trim()) {
       params = params.set('valuePath', opts.valuePath.trim());
+    }
+    if (opts.valuePathMode === 'lookahead') {
+      params = params.set('valuePathMode', 'lookahead');
     }
     if (opts.versionId) {
       params = params.set('versionId', opts.versionId);

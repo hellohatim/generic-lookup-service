@@ -96,6 +96,10 @@
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
 
+.value-live-field {
+  min-width: 12rem;
+}
+
 .section-actions {
   margin-top: 0.75rem;
   padding-top: 0.25rem;

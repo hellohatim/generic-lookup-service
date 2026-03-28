@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AppError } from "./errors.js";
 import {
   buildEntriesListMongoFilter,
+  buildValuePathLookaheadClause,
   mongoFieldForValuePath,
   normalizeValuePath,
 } from "./valuePathSearch.js";
@@ -58,5 +59,26 @@ describe("buildEntriesListMongoFilter", () => {
 
   it("maps path to mongo field", () => {
     expect(mongoFieldForValuePath(["a", "b"])).toBe("value.a.b");
+  });
+
+  it("valuePathMode lookahead builds $or with dotted field and $expr child scan", () => {
+    const clause = buildValuePathLookaheadClause(["meta"], "hi", "partial", false);
+    expect(clause.$or).toHaveLength(2);
+    expect(clause.$or[0]).toEqual({
+      "value.meta": { $regex: "hi", $options: "i" },
+    });
+    expect(clause.$or[1]).toMatchObject({ $expr: expect.any(Object) });
+  });
+
+  it("uses lookahead clause when valuePathMode is lookahead", () => {
+    const f = buildEntriesListMongoFilter({
+      legacyValue: "x",
+      legacyValueMatch: "exact",
+      legacyCaseSensitive: true,
+      valuePath: "block",
+      valuePathMode: "lookahead",
+    });
+    expect(f.$or).toHaveLength(2);
+    expect(f.$or[0]).toEqual({ "value.block": "x" });
   });
 });

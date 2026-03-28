@@ -1016,6 +1016,8 @@ export function createApiRouter(db: Db): Router {
         legacyValueMatch: req.query.valueMatch as string | undefined,
         legacyCaseSensitive: req.query.caseSensitive === "true",
         valuePath: valuePathQ,
+        valuePathMode:
+          req.query.valuePathMode === "lookahead" ? "lookahead" : "exact",
       });
 
       const { page, pageSize } = pagination(req);
@@ -1044,6 +1046,7 @@ export function createApiRouter(db: Db): Router {
         valueMatch?: string;
         caseSensitive?: boolean;
         valuePath?: string;
+        valuePathMode?: string;
         filters?: Array<{
           path: string;
           value: string;
@@ -1078,6 +1081,8 @@ export function createApiRouter(db: Db): Router {
           legacyValueMatch: body.valueMatch,
           legacyCaseSensitive: body.caseSensitive === true,
           valuePath: valuePathB,
+          valuePathMode:
+            body.valuePathMode === "lookahead" ? "lookahead" : "exact",
           valuePathFilters: body.filters,
         });
       }

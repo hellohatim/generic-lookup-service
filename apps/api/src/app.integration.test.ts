@@ -123,6 +123,52 @@ describe("lookup API (integration)", () => {
     });
   });
 
+  it("GET valuePathMode lookahead matches immediate string child under path", async () => {
+    const t = await request(app)
+      .post("/lookup/v1/tenants")
+      .send({ name: "LA", slug: `tenant-la-${Date.now()}` })
+      .expect(201);
+    const tenantId = t.body.id as string;
+    const n = await request(app)
+      .post(`/lookup/v1/tenants/${tenantId}/namespaces`)
+      .send({ name: "N", slug: `ns-la-${Date.now()}` })
+      .expect(201);
+    const namespaceId = n.body.id as string;
+    const tb = await request(app)
+      .post(
+        `/lookup/v1/tenants/${tenantId}/namespaces/${namespaceId}/tables`
+      )
+      .send({ name: "T", slug: `tbl-la-${Date.now()}` })
+      .expect(201);
+    const tableId = tb.body.id as string;
+
+    await request(app)
+      .post(
+        `/lookup/v1/tenants/${tenantId}/namespaces/${namespaceId}/tables/${tableId}/entries`
+      )
+      .send({
+        key: "nested",
+        value: { block: { city: "Denver", note: "x" } },
+      })
+      .expect(201);
+
+    const base = `/lookup/v1/tenants/${tenantId}/namespaces/${namespaceId}/tables/${tableId}/entries`;
+    const exactOnly = await request(app)
+      .get(
+        `${base}?valuePath=block&value=Denver&valueMatch=exact&pageSize=10`
+      )
+      .expect(200);
+    expect(exactOnly.body.items.length).toBe(0);
+
+    const lookahead = await request(app)
+      .get(
+        `${base}?valuePath=block&value=Denver&valueMatch=exact&valuePathMode=lookahead&pageSize=10`
+      )
+      .expect(200);
+    expect(lookahead.body.items.length).toBe(1);
+    expect(lookahead.body.items[0].key).toBe("nested");
+  });
+
   it("search query tree: OR matches one of two keys", async () => {
     const t = await request(app)
       .post("/lookup/v1/tenants")

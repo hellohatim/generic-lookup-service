@@ -1,5 +1,12 @@
 import { SlicePipe } from '@angular/common';
-import { Component, inject, OnInit, ViewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,6 +36,7 @@ import {
   EntryEditDialogComponent,
   type EntryEditData,
 } from '../dialogs/entry-edit-dialog.component';
+import { Subject, debounceTime } from 'rxjs';
 
 @Component({
   selector: 'app-table-entries',
@@ -58,6 +66,10 @@ export class TableEntriesComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  private readonly destroyRef = inject(DestroyRef);
+
+  /** Debounced reload when the Value field changes (live “contains” search). */
+  private readonly valueTyping$ = new Subject<void>();
 
   @ViewChild(MatPaginator) paginator?: MatPaginator;
 
@@ -93,6 +105,13 @@ export class TableEntriesComponent implements OnInit {
     this.tenantId = this.route.snapshot.paramMap.get('tenantId') ?? '';
     this.namespaceId = this.route.snapshot.paramMap.get('namespaceId') ?? '';
     this.tableId = this.route.snapshot.paramMap.get('tableId') ?? '';
+    this.valueTyping$
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.pageIndex = 0;
+        this.paginator?.firstPage();
+        this.loadEntries();
+      });
     this.loadTableAndVersions();
   }
 
@@ -156,10 +175,54 @@ export class TableEntriesComponent implements OnInit {
     this.loadEntries();
   }
 
+  /** Fires debounced grid reload while typing in Value (partial match when “Value match” is unset). */
+  onValueFilterTyping(): void {
+    this.valueTyping$.next();
+  }
+
+  /** When Value match changes and Value is non-empty, refresh immediately. */
+  onValueMatchChange(): void {
+    if (!this.filterValue.trim()) {
+      return;
+    }
+    this.pageIndex = 0;
+    this.paginator?.firstPage();
+    this.loadEntries();
+  }
+
+  /** When Value is non-empty, path edits use the same debounced reload as typing in Value. */
+  onValuePathChange(): void {
+    if (!this.filterValue.trim()) {
+      return;
+    }
+    this.valueTyping$.next();
+  }
+
   onPage(ev: PageEvent): void {
     this.pageIndex = ev.pageIndex;
     this.pageSize = ev.pageSize;
     this.loadEntries();
+  }
+
+  /**
+   * API requires a non-empty `value` whenever `valuePath` is sent.
+   * If “Value match” is unset but the user typed a value, default to partial (substring) for live search.
+   */
+  private valueFilterParams(): {
+    value?: string;
+    valueMatch?: 'exact' | 'partial';
+    valuePath?: string;
+  } {
+    const pathTrim = this.filterValuePath.trim();
+    const valTrim = this.filterValue.trim();
+    const canUsePath = Boolean(pathTrim && valTrim);
+    const valueMatch: 'exact' | 'partial' | undefined =
+      valTrim && !this.filterValueMatch ? 'partial' : this.filterValueMatch || undefined;
+    return {
+      value: valTrim || undefined,
+      valueMatch: valTrim ? valueMatch : undefined,
+      valuePath: canUsePath ? pathTrim : undefined,
+    };
   }
 
   loadEntries(): void {
@@ -168,14 +231,13 @@ export class TableEntriesComponent implements OnInit {
       this.selectedVersionId === this.table?.currentVersionId
         ? undefined
         : this.selectedVersionId;
+    const vf = this.valueFilterParams();
     this.api
       .listEntries(this.tenantId, this.namespaceId, this.tableId, {
         page: this.pageIndex + 1,
         pageSize: this.pageSize,
-        key: this.filterKey || undefined,
-        value: this.filterValue || undefined,
-        valueMatch: this.filterValueMatch || undefined,
-        valuePath: this.filterValuePath || undefined,
+        key: this.filterKey.trim() || undefined,
+        ...vf,
         versionId,
       })
       .subscribe({

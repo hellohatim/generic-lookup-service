@@ -796,6 +796,7 @@ paths:
         - `keyPrefix` — keys starting with prefix (optional)
         - `value` + `valueMatch` — when **`valuePath` is omitted**, filter using stored **`valueString`** (primitive string values; `partial` requires `valueType: string`)
         - `valuePath` + `value` + `valueMatch` — filter on a **nested string field** inside BSON `value` using a dot path (e.g. `description`, `meta.code`). Leading `value.` is optional.
+        - `valuePathMode` — with `valuePath` + `value`: **`exact`** (default) uses only that dotted field; **`lookahead`** matches that field or any **immediate string child** under the object at that path (see parameter description).
         - `caseSensitive` — default false for string comparisons
         - **Cursor mode:** when `cursor` is set, **`page` is ignored**; use opaque `nextCursor` from prior response; sort **`_id` ascending** (see data model).
 
@@ -854,6 +855,15 @@ paths:
           description: |
             Dot-separated path under document field **`value`** (e.g. `text`, `meta.code`). Optional prefix `value.` is accepted.
             **Requires** query parameter **`value`**. Each segment must match `^[a-zA-Z_][a-zA-Z0-9_]*$`.
+        - name: valuePathMode
+          in: query
+          schema:
+            type: string
+            enum: [exact, lookahead]
+            default: exact
+          description: |
+            With **`valuePath`** + **`value`**: **`exact`** (default) matches only the dotted field **`value.<path>`**.
+            **`lookahead`** also matches the same field, or any **immediate string property** nested directly under that object (one level below the path).
         - name: versionId
           in: query
           schema:
@@ -1858,6 +1868,11 @@ components:
           type: string
           pattern: '^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$'
           description: Requires `value` when set (same as GET)
+        valuePathMode:
+          type: string
+          enum: [exact, lookahead]
+          default: exact
+          description: Same semantics as GET `valuePathMode` when using `valuePath` + `value`
         filters:
           type: array
           items:

@@ -56,7 +56,11 @@
     <mat-card class="section-card">
       <mat-card-header>
         <mat-card-title>Filters</mat-card-title>
-        <mat-card-subtitle>Narrow the entry list; click Apply to load</mat-card-subtitle>
+        <mat-card-subtitle>
+          Typing in <strong>Value</strong> refreshes the grid after a short pause (substring match when “Value match”
+          is not set). Use <strong>Apply filters</strong> for key, nested path, or when you change match mode without
+          editing Value.
+        </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="filter-key-row">
@@ -66,21 +70,32 @@
           </mat-form-field>
         </div>
         <div class="filter-grid filter-grid-value">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="value-live-field">
+            <mat-label>Value</mat-label>
+            <input
+              matInput
+              [(ngModel)]="filterValue"
+              (ngModelChange)="onValueFilterTyping()"
+              placeholder="Type to filter…"
+            />
+            <mat-hint>Live search (~300ms)</mat-hint>
+          </mat-form-field>
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Value path (nested)</mat-label>
-            <input matInput [(ngModel)]="filterValuePath" placeholder="e.g. city" />
+            <input
+              matInput
+              [(ngModel)]="filterValuePath"
+              (ngModelChange)="onValuePathChange()"
+              placeholder="e.g. city or meta"
+            />
           </mat-form-field>
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Value match</mat-label>
-            <mat-select [(ngModel)]="filterValueMatch">
-              <mat-option value="">(none)</mat-option>
+            <mat-select [(ngModel)]="filterValueMatch" (ngModelChange)="onValueMatchChange()">
+              <mat-option value="">(none) — contains while typing</mat-option>
               <mat-option value="exact">Exact</mat-option>
               <mat-option value="partial">Contains (strings)</mat-option>
             </mat-select>
-          </mat-form-field>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <mat-label>Value</mat-label>
-            <input matInput [(ngModel)]="filterValue" />
           </mat-form-field>
         </div>
         <div class="section-actions">
